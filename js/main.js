@@ -13,6 +13,7 @@
  See the License for the specific language governing permissions and
  limitations under the License.
  */
+import { openDB } from 'idb';
 
 // Register the service worker
 if ('serviceWorker' in navigator) {
@@ -39,7 +40,11 @@ if ('serviceWorker' in navigator) {
     }
   });
 }
-
+const db = await openDB('settings-store', 1, {
+  upgrade(db) {
+    db.createObjectStore('settings');
+  },
+});
 window.addEventListener('DOMContentLoaded', async () => {
   // Set up the editor
   const { Editor } = await import('./app/editor.js');
@@ -48,9 +53,23 @@ window.addEventListener('DOMContentLoaded', async () => {
   // Set up the menu
   const { Menu } = await import('./app/menu.js');
   new Menu(document.querySelector('.actions'), editor);
+  // Save content to database on edit
+  editor.onUpdate(async (content) => {
+    await db.put('settings', content, 'content');
+  });
 
   // Set the initial state in the editor
   const defaultText = `# Welcome to PWA Edit!\n\nTo leave the editing area, press the \`esc\` key, then \`tab\` or \`shift+tab\`.`;
+  editor.setContent((await db.get('settings', 'content')) || defaultText);
 
-  editor.setContent(defaultText);
+  // Set up night mode toggle
+  const { NightMode } = await import('./app/night-mode.js');
+  new NightMode(
+    document.querySelector('#mode'),
+    async (mode) => {
+      editor.setTheme(mode);
+      // Save the night mode setting when changed
+    },
+    // Retrieve the night mode setting on initialization
+  );
 });
